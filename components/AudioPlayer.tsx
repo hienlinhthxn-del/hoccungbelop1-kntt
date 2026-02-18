@@ -31,13 +31,29 @@ async function decodeAudioData(
 }
 
 export const playSpeech = async (base64Audio: string) => {
+  if (!base64Audio) {
+    console.error("Dữ liệu âm thanh trống!");
+    return;
+  }
+
+  console.log("Đang chuẩn bị phát âm thanh, độ dài dữ liệu:", base64Audio.length);
+
   try {
-    // Thử chơi như một file audio chuẩn (thường là WAV có header từ Gemini)
-    const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+    // Cách 1: Thử chơi như một file audio chuẩn (WAV/AAC) bằng Blob
+    const bytes = decode(base64Audio);
+    const blob = new Blob([bytes], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+
+    audio.onended = () => URL.revokeObjectURL(url);
+
+    console.log("Bắt đầu phát âm thanh qua Blob URL...");
     await audio.play();
+    console.log("Phát âm thanh thành công!");
   } catch (err) {
-    console.warn("Standard audio play failed, trying raw PCM decoding...", err);
-    // Nếu thất bại, thử decode theo kiểu PCM thô (Int16)
+    console.warn("Phát bằng Audio Object thất bại, thử sang Web Audio API...", err);
+
+    // Cách 2: Fallback sang Web Audio API cho PCM thô
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const audioBuffer = await decodeAudioData(decode(base64Audio), audioContext, 24000, 1);
@@ -45,8 +61,9 @@ export const playSpeech = async (base64Audio: string) => {
       source.buffer = audioBuffer;
       source.connect(audioContext.destination);
       source.start();
+      console.log("Phát âm thanh qua Web Audio API thành công!");
     } catch (pcmErr) {
-      console.error("All audio play methods failed:", pcmErr);
+      console.error("Tất cả các phương thức phát âm thanh đều thất bại:", pcmErr);
     }
   }
 };
