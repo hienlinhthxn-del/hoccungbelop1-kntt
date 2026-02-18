@@ -26,22 +26,23 @@ const AUDIO_MODEL = "gemini-2.0-flash";
 const LIVE_MODEL = "gemini-2.0-flash-exp"; // Cho tính năng trò chuyện trực tiếp
 
 export const generateSpeech = async (text: string) => {
-  const ai = getAI();
   try {
-    const response = await ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: [{ parts: [{ text: `Hãy đóng vai một cô giáo tiểu học Việt Nam có giọng nói trẻ trung, ấm áp, nhẹ nhàng và phát âm cực kỳ chuẩn xác. Hãy đọc nội dung sau đây cho học sinh lớp 1 nghe: ${text}` }] }],
-      config: {
+    const ai = getAI();
+    const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const response = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: `Hãy đóng vai một cô giáo tiểu học Việt Nam trẻ trung, ấm áp. Hãy đọc nội dung này cho học sinh lớp 1: ${text}` }] }],
+      generationConfig: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Puck' }, // Giọng nữ cao, phù hợp vai cô giáo
+            prebuiltVoiceConfig: { voiceName: 'Puck' },
           },
         },
       },
     });
-    // Trả về dữ liệu base64 của âm thanh
-    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+    return response.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   } catch (error) {
     console.error("Lỗi tạo giọng nói AI:", error);
     return null;
@@ -50,14 +51,14 @@ export const generateSpeech = async (text: string) => {
 
 export const generateExercises = async (category: string): Promise<ExerciseItem[]> => {
   const ai = getAI();
+  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
   const prompt = `Tạo 5 bài tập tiếng Việt lớp 1 (bộ sách Kết nối tri thức) chủ đề ${category}. 
   Các loại: matching (nối từ-hình), fill_in (điền chữ cái), quiz (chọn đáp án). 
   Trả về JSON array. promptForImage là mô tả hình ảnh đơn giản cho bé.`;
 
-  const response = await ai.models.generateContent({
-    model: TEXT_MODEL,
-    contents: prompt,
-    config: {
+  const response = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
@@ -77,19 +78,19 @@ export const generateExercises = async (category: string): Promise<ExerciseItem[
     }
   });
 
-  return JSON.parse(response.text || '[]');
+  return JSON.parse(response.response.text() || '[]');
 };
 
 export const generateStory = async (topic: string): Promise<StoryResponse> => {
   const ai = getAI();
+  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
   const prompt = `Viết một câu chuyện ngắn 3 phần cho bé lớp 1 về chủ đề ${topic}. 
   Sử dụng câu ngắn, đơn giản. Trả về JSON gồm title và mảng parts (text, imagePrompt). 
   imagePrompt nên tả chi tiết phong cách hoạt hình dễ thương.`;
 
-  const response = await ai.models.generateContent({
-    model: TEXT_MODEL,
-    contents: prompt,
-    config: {
+  const response = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -112,62 +113,42 @@ export const generateStory = async (topic: string): Promise<StoryResponse> => {
     }
   });
 
-  return JSON.parse(response.text || '{}');
+  return JSON.parse(response.response.text() || '{}');
 };
 
-export const chatWithGemini = async (message: string, history: any[] = []) => {
+export const chatWithGemini = async (message: string) => {
   const ai = getAI();
-  const chat = ai.chats.create({
-    model: TEXT_MODEL,
-    config: {
-      systemInstruction: 'Bạn là một giáo viên tiểu học thân thiện cho học sinh lớp 1 tại Việt Nam. Sử dụng ngôn ngữ đơn giản, dễ hiểu, khích lệ bé.',
-    },
+  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: message }] }],
+    generationConfig: {
+      systemInstruction: 'Bạn là một giáo viên tiểu học thân thiện cho học sinh lớp 1 tại Việt Nam. Sử dụng ngôn ngữ đơn giản, dễ hiểu, khích lệ bé.'
+    } as any
   });
-  const response = await chat.sendMessage({ message });
-  return response.text;
+  return result.response.text();
 };
 
 export const analyzeMathImage = async (base64Image: string) => {
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: TEXT_MODEL,
-    contents: {
+  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const response = await model.generateContent({
+    contents: [{
+      role: 'user',
       parts: [
         { inlineData: { mimeType: 'image/png', data: base64Image } },
         { text: 'Hãy giải bài toán toán lớp 1 trong ảnh này. Giải thích từng bước thật đơn giản cho bé 6 tuổi hiểu.' }
       ]
-    },
+    }]
   });
-  return response.text;
+  return response.response.text();
 };
 
-export const generateLearningImage = async (prompt: string, aspectRatio: string = "1:1", imageSize: string = "1K") => {
+export const generateLearningImage = async (prompt: string) => {
   const ai = getAI();
-  // Sử dụng imagen-3 hoặc gemini-2.0-flash để tạo ảnh
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash', // Imagen 3 thường được gọi qua tool hoặc model ID cụ thể tùy vùng
-    contents: { parts: [{ text: `Generate a cute children cartoon illustration: ${prompt}` }] },
-    // Lưu ý: Tùy theo cấu hình API, có thể cần sử dụng tool call cho Imagen
-  });
+  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const response = await model.generateContent(`Generate a cute children cartoon illustration: ${prompt}`);
 
-  for (const part of response.candidates?.[0].content.parts || []) {
-    if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-  }
-  return null;
-};
-
-export const editImage = async (base64Image: string, prompt: string) => {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: {
-      parts: [
-        { inlineData: { data: base64Image, mimeType: 'image/png' } },
-        { text: prompt }
-      ]
-    }
-  });
-  for (const part of response.candidates?.[0].content.parts || []) {
+  for (const part of response.response.candidates?.[0].content.parts || []) {
     if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
   }
   return null;
@@ -175,16 +156,14 @@ export const editImage = async (base64Image: string, prompt: string) => {
 
 export const searchGrounding = async (query: string) => {
   const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: TEXT_MODEL,
-    contents: query,
-    config: {
-      tools: [{ googleSearch: {} }],
-    },
+  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const response = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: query }] }],
+    tools: [{ googleSearch: {} }] as any,
   });
   return {
-    text: response.text,
-    sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
+    text: response.response.text(),
+    sources: (response.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks || []
   };
 };
 
