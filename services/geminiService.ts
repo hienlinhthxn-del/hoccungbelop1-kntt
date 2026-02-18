@@ -2,47 +2,35 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ExerciseItem, StoryResponse } from "../types";
 
-// Hàm lấy API Key linh hoạt: Thử từ biến môi trường của Vite, sau đó thử từ window.aistudio
+// Hàm lấy API Key linh hoạt
 const getApiKey = () => {
   const envKey = import.meta.env.VITE_GEMINI_API_KEY || (window as any).process?.env?.API_KEY;
   if (envKey && envKey !== "PLACEHOLDER_API_KEY") return envKey;
-
-  // Nếu không có trong env, có thể đang chạy trong môi trường preview có sẵn key
   return (window as any).aistudio?.getApiKey?.() || "";
 };
 
 const getAI = () => {
   const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("API_KEY_MISSING");
-  }
+  if (!apiKey) throw new Error("API_KEY_MISSING");
   return new GoogleGenAI({ apiKey });
 };
 
-// Model Constants - Sử dụng các model ổn định nhất hiện tại
 const TEXT_MODEL = "gemini-2.0-flash";
-const IMAGE_MODEL = "imagen-3"; // Hoặc gemini-2.0-flash với tool call nếu được hỗ trợ
-const AUDIO_MODEL = "gemini-2.0-flash";
-const LIVE_MODEL = "gemini-2.0-flash-exp"; // Cho tính năng trò chuyện trực tiếp
 
 export const generateSpeech = async (text: string) => {
   try {
     const ai = getAI();
-    const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-    const response = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: `Hãy đóng vai một cô giáo tiểu học Việt Nam trẻ trung, ấm áp. Hãy đọc nội dung này cho học sinh lớp 1: ${text}` }] }],
-      generationConfig: {
+    const response = await ai.models.generateContent({
+      model: TEXT_MODEL,
+      contents: [{ role: 'user', parts: [{ text: `Hãy đóng vai một cô giáo tiểu học Việt Nam ấm áp. Đọc nội dung này cho học sinh nghe: ${text}` }] }],
+      config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Puck' },
-          },
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } },
         },
       },
     });
-
-    return response.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   } catch (error) {
     console.error("Lỗi tạo giọng nói AI:", error);
     return null;
@@ -51,14 +39,10 @@ export const generateSpeech = async (text: string) => {
 
 export const generateExercises = async (category: string): Promise<ExerciseItem[]> => {
   const ai = getAI();
-  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
-  const prompt = `Tạo 5 bài tập tiếng Việt lớp 1 (bộ sách Kết nối tri thức) chủ đề ${category}. 
-  Các loại: matching (nối từ-hình), fill_in (điền chữ cái), quiz (chọn đáp án). 
-  Trả về JSON array. promptForImage là mô tả hình ảnh đơn giản cho bé.`;
-
-  const response = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: {
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL,
+    contents: [{ role: 'user', parts: [{ text: `Tạo 5 bài tập tiếng Việt lớp 1 bộ sách Kết nối tri thức chủ đề ${category}. Trả về JSON array.` }] }],
+    config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
@@ -77,20 +61,15 @@ export const generateExercises = async (category: string): Promise<ExerciseItem[
       }
     }
   });
-
-  return JSON.parse(response.response.text() || '[]');
+  return JSON.parse(response.text || '[]');
 };
 
 export const generateStory = async (topic: string): Promise<StoryResponse> => {
   const ai = getAI();
-  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
-  const prompt = `Viết một câu chuyện ngắn 3 phần cho bé lớp 1 về chủ đề ${topic}. 
-  Sử dụng câu ngắn, đơn giản. Trả về JSON gồm title và mảng parts (text, imagePrompt). 
-  imagePrompt nên tả chi tiết phong cách hoạt hình dễ thương.`;
-
-  const response = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: {
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL,
+    contents: [{ role: 'user', parts: [{ text: `Viết truyện lớp 1 chủ đề ${topic}. Trả về JSON có title và parts (text, imagePrompt).` }] }],
+    config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -112,43 +91,43 @@ export const generateStory = async (topic: string): Promise<StoryResponse> => {
       }
     }
   });
-
-  return JSON.parse(response.response.text() || '{}');
+  return JSON.parse(response.text || '{}');
 };
 
 export const chatWithGemini = async (message: string) => {
   const ai = getAI();
-  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
-  const result = await model.generateContent({
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL,
     contents: [{ role: 'user', parts: [{ text: message }] }],
-    generationConfig: {
-      systemInstruction: 'Bạn là một giáo viên tiểu học thân thiện cho học sinh lớp 1 tại Việt Nam. Sử dụng ngôn ngữ đơn giản, dễ hiểu, khích lệ bé.'
+    config: {
+      systemInstruction: 'Bạn là một giáo viên tiểu học thân thiện cho học sinh lớp 1 tại Việt Nam.'
     } as any
   });
-  return result.response.text();
+  return response.text;
 };
 
 export const analyzeMathImage = async (base64Image: string) => {
   const ai = getAI();
-  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
-  const response = await model.generateContent({
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL,
     contents: [{
       role: 'user',
       parts: [
         { inlineData: { mimeType: 'image/png', data: base64Image } },
-        { text: 'Hãy giải bài toán toán lớp 1 trong ảnh này. Giải thích từng bước thật đơn giản cho bé 6 tuổi hiểu.' }
+        { text: 'Giải toán lớp 1 trong ảnh.' }
       ]
     }]
   });
-  return response.response.text();
+  return response.text;
 };
 
 export const generateLearningImage = async (prompt: string) => {
   const ai = getAI();
-  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
-  const response = await model.generateContent(`Generate a cute children cartoon illustration: ${prompt}`);
-
-  for (const part of response.response.candidates?.[0].content.parts || []) {
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL,
+    contents: [{ role: 'user', parts: [{ text: `Vẽ tranh hoạt hình: ${prompt}` }] }]
+  });
+  for (const part of response.candidates?.[0].content.parts || []) {
     if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
   }
   return null;
@@ -156,35 +135,30 @@ export const generateLearningImage = async (prompt: string) => {
 
 export const searchGrounding = async (query: string) => {
   const ai = getAI();
-  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
-  const response = await model.generateContent({
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL,
     contents: [{ role: 'user', parts: [{ text: query }] }],
-    tools: [{ googleSearch: {} }] as any,
+    config: {
+      tools: [{ googleSearch: {} }] as any,
+    },
   });
   return {
-    text: response.response.text(),
-    sources: (response.response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks || []
+    text: response.text,
+    sources: (response.candidates?.[0] as any)?.groundingMetadata?.groundingChunks || []
   };
 };
 
 export const generateLearningVideo = async (prompt: string, aspectRatio: '16:9' | '9:16') => {
   const ai = getAI();
-  // Veo model ID chuẩn thường là veo-1 hoặc tương tự
   let operation = await ai.models.generateVideos({
     model: 'veo-1-fast-generate-preview',
     prompt,
-    config: {
-      numberOfVideos: 1,
-      resolution: '720p',
-      aspectRatio
-    }
+    config: { numberOfVideos: 1, resolution: '720p', aspectRatio }
   });
-
   while (!operation.done) {
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    await new Promise(resolve => setTimeout(resolve, 5000));
     operation = await ai.operations.getVideosOperation({ operation: operation });
   }
-
   const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
   const apiKey = getApiKey();
   const videoResp = await fetch(`${downloadLink}&key=${apiKey}`);
