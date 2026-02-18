@@ -1,0 +1,8 @@
+{
+  "name": "Học Cùng Bé - Lớp 1 (Kết Nối Tri Thức)",
+  "description": "An interactive AI-powered learning companion for Vietnamese Grade 1 students following the 'Kết Nối Tri Thức' curriculum. Features include AI tutoring, image generation, speech-to-text, and creative video storytelling.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
