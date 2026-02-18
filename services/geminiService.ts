@@ -29,20 +29,21 @@ export const generateSpeech = async (text: string) => {
   const ai = getAI();
   try {
     const response = await ai.models.generateContent({
-      model: TEXT_MODEL, // Sử dụng text-to-speech qua prompt hoặc model chuyên dụng nếu có
-      contents: [{ parts: [{ text: `Hãy đóng vai một cô giáo tiểu học có giọng nói ấm áp, nhẹ nhàng. Đọc nội dung này: ${text}` }] }],
+      model: TEXT_MODEL,
+      contents: [{ parts: [{ text: `Hãy đóng vai một cô giáo tiểu học Việt Nam có giọng nói trẻ trung, ấm áp, nhẹ nhàng và phát âm cực kỳ chuẩn xác. Hãy đọc nội dung sau đây cho học sinh lớp 1 nghe: ${text}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Puck' },
+            prebuiltVoiceConfig: { voiceName: 'Puck' }, // Giọng nữ cao, phù hợp vai cô giáo
           },
         },
       },
     });
+    // Trả về dữ liệu base64 của âm thanh
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   } catch (error) {
-    console.error("Speech Generation Error:", error);
+    console.error("Lỗi tạo giọng nói AI:", error);
     return null;
   }
 };

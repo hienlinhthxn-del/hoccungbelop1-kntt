@@ -31,10 +31,22 @@ async function decodeAudioData(
 }
 
 export const playSpeech = async (base64Audio: string) => {
-  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-  const audioBuffer = await decodeAudioData(decode(base64Audio), audioContext, 24000, 1);
-  const source = audioContext.createBufferSource();
-  source.buffer = audioBuffer;
-  source.connect(audioContext.destination);
-  source.start();
+  try {
+    // Thử chơi như một file audio chuẩn (thường là WAV có header từ Gemini)
+    const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+    await audio.play();
+  } catch (err) {
+    console.warn("Standard audio play failed, trying raw PCM decoding...", err);
+    // Nếu thất bại, thử decode theo kiểu PCM thô (Int16)
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      const audioBuffer = await decodeAudioData(decode(base64Audio), audioContext, 24000, 1);
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+      source.start();
+    } catch (pcmErr) {
+      console.error("All audio play methods failed:", pcmErr);
+    }
+  }
 };
